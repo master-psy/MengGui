@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>猛鬼宿舍 - 自由探索版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Creepster&family=Noto+Sans+SC:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #000;
+            color: #e94560;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .horror-font { font-family: 'Creepster', cursive; }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #0f0f1a;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+            z-index: 10;
+        }
+
+        .interactive { pointer-events: auto; }
+
+        #joystick-zone {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        #joystick-knob {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            background: rgba(233, 69, 96, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px #e94560;
+        }
+
+        #context-menu {
+            position: absolute;
+            background: rgba(22, 33, 62, 0.98);
+            border: 2px solid #e94560;
+            border-radius: 8px;
+            padding: 6px;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 150px;
+            z-index: 100;
+            pointer-events: auto;
+            transform: translate(10px, -50%);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.9);
+        }
+
+        .ctx-btn {
+            background: #1a1a2e;
+            color: white;
+            border: 1px solid #4ecca3;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .ctx-btn:hover { background: #4ecca3; color: #000; }
+        .ctx-btn-danger { border-color: #ff4444; color: #ffcccc; }
+        .ctx-btn-danger:hover { background: #ff4444; color: white; }
+        
+        .price-tag { font-size: 0.75rem; opacity: 0.8; font-weight: bold; color: #ffd700; }
+        .level-tag { font-size: 0.7rem; color: #aaa; margin-left: 4px;}
+
+        #action-btn {
+            position: absolute;
+            bottom: 80px;
+            right: 50px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #4ecca3;
+            color: #1a1a2e;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 15px #4ecca3;
+            font-size: 1.2rem;
+            pointer-events: auto;
+            display: none;
+            animation: pulse-green 1.5s infinite;
+            border: 4px solid #fff;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        @keyframes pulse-green {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(78, 204, 163, 0); }
+            100% { transform: scale(1); }
+        }
+
+        #hud-top {
+            display: flex;
+            justify-content: space-between;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+            gap: 5px;
+        }
+
+        .stat-box {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid #555;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="context-menu"></div>
+
+        <div id="ui-overlay" class="ui-layer">
+            <div id="hud-top" class="interactive">
+                <div class="stat-box border-yellow-500 text-yellow-400">
+                    💰 <span id="gold-display">0</span> <span class="text-xs text-gray-400">(+<span id="income-display">0</span>)</span>
+                </div>
+                <div class="stat-box border-blue-400 text-blue-300">
+                    ⚡ <span id="elec-display">0</span>
+                </div>
+                <div id="countdown-box" class="stat-box border-gray-500 text-gray-300">
+                    ⏳ <span id="timer-display">30</span>s
+                </div>
+                <div class="stat-box border-red-500 text-red-500">
+                    👻 Lv.<span id="ghost-level-display">1</span>
+                </div>
+            </div>
+
+            <div id="game-msg" class="absolute top-20 w-full text-center text-white text-shadow-md font-bold text-lg animate-bounce pointer-events-none hidden">
+                快找个房间躲起来！
+            </div>
+
+            <div id="joystick-zone">
+                <div id="joystick-knob"></div>
+            </div>
+
+            <div id="action-btn" onclick="game.handleAction()">
+                🛏️<br>睡觉
+            </div>
+
+            <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-gray-500 text-xs pointer-events-none hidden md:block w-full text-center">
+                WASD移动 | 躺平后拖动屏幕移动视角 | 点击格子建造
+            </div>
+        </div>
+
+        <div id="start-screen" class="modal">
+            <h1 class="text-6xl text-red-600 horror-font mb-4">猛鬼宿舍</h1>
+            <h2 class="text-2xl text-white mb-8">自由探索版</h2>
+            <div class="text-gray-400 text-sm mb-8 text-center leading-relaxed">
+                1. 移动摇杆寻找空房间<br>
+                2. 点击 [睡觉] 占领房间<br>
+                3. 点击格子建造武器 (初始只需 💰8)<br>
+                4. 升级所有物品，属性翻倍！
+            </div>
+            <button onclick="game.startGame()" class="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-full text-xl shadow-lg transform transition hover:scale-105">
+                开始游戏
+            </button>
+        </div>
+
+        <div id="game-over-screen" class="modal hidden">
+            <h2 id="result-title" class="text-4xl mb-4 font-bold"></h2>
+            <p id="result-msg" class="text-gray-300 mb-6"></p>
+            <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded">
+                重新开始
+            </button>
+        </div>
+    </div>
+
+<script>
+const CONFIG = {
+    ROOM_W: 160,
+    ROOM_H: 160,
+    CELL_SIZE: 32,
+    GRID_ROWS: 5,
+    GRID_COLS: 5,
+    MAP_ROWS: 2,
+    MAP_COLS: 3,
+    COLORS: {
+        floor: '#2a2a40',
+        wall: '#16213e',
+        door: '#4ecca3',
+        bed: '#ffd369',
+        turret: '#393e46',
+        trap: '#5c2a9d', 
+        valid: 'rgba(0, 255, 0, 0.3)',
+        invalid: 'rgba(255, 0, 0, 0.3)'
+    },
+    // 基础价格配置
+    COSTS: {
+        BED_BASE: 25,
+        DOOR_BASE: 10,
+        TURRET_BASE: 8,
+        GAME_BASE: 200,
+        TRAP_BASE: 50
+    }
+};
+
+const Utils = {
+    random: (min, max) => Math.floor(Math.random() * (max - min + 1)) + min,
+    getDistance: (o1, o2) => Math.hypot(o1.x - o2.x, o1.y - o2.y),
+    LAYOUTS: [
+        [[1,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,9,0,0]], 
+        [[0,0,0,0,1],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,9,0,0]], 
+        [[0,0,0,0,0],[0,0,1,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,9,0,0]], 
+        [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,1],[0,0,9,0,0]]  
+    ]
+};
+
+class Camera {
+    constructor() {
+        this.x = 0;
+        this.y = 0;
+        this.zoom = 1;
+        this.targetZoom = 1;
+        this.isManual = false;
+    }
+
+    follow(target, dt) {
+        if (this.isManual) return;
+        const targetX = target.x;
+        const targetY = target.y;
+        this.x += (targetX - this.x) * 5 * dt;
+        this.y += (targetY - this.y) * 5 * dt;
+    }
+    
+    updateZoom(dt) {
+        this.zoom += (this.targetZoom - this.zoom) * 5 * dt;
+    }
+
+    screenToWorld(sx, sy, canvasW, canvasH) {
+        return {
+            x: (sx - canvasW / 2) / this.zoom + this.x,
+            y: (sy - canvasH / 2) / this.zoom + this.y
+        };
+    }
+}
+
+class Entity {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.dead = false;
+        this.vx = 0;
+        this.vy = 0;
+        this.speed = 100;
+    }
+}
+
+class Room {
+    constructor(id, row, col) {
+        this.id = id;
+        const gapX = 100; 
+        const gapY = 120; 
+        this.x = col * (CONFIG.ROOM_W + gapX);
+        this.y = row * (CONFIG.ROOM_H + gapY);
+        this.w = CONFIG.ROOM_W;
+        this.h = CONFIG.ROOM_H;
+        
+        this.owner = null;
+        this.state = 'OPEN'; 
+        
+        const template = Utils.LAYOUTS[Utils.random(0, Utils.LAYOUTS.length - 1)];
+        this.grid = template.map(r => [...r]);
+        
+        this.buildings = [];
+
+        this.door = {
+            active: false,
+            level: 1,
+            maxHp: 200,
+            hp: 200,
+            x: this.x + this.w / 2 - 20,
+            y: this.y + this.h - 10,
+            w: 40,
+            h: 10
+        };
+
+        let bx = 0, by = 0, bc = 0;
+        for(let r=0; r<CONFIG.GRID_ROWS; r++) {
+            for(let c=0; c<CONFIG.GRID_COLS; c++) {
+                if(this.grid[r][c] === 1) {
+                    bx += (c * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2);
+                    by += (r * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2);
+                    bc++;
+                }
+            }
+        }
+        if(bc === 0) { bx = this.w/2; by = this.h/2; bc=1; }
+        this.bedCenter = { x: this.x + bx/bc, y: this.y + by/bc };
+    }
+
+    getGridAt(wx, wy) {
+        if (wx < this.x || wx > this.x + this.w || wy < this.y || wy > this.y + this.h) return null;
+        const c = Math.floor((wx - this.x) / CONFIG.CELL_SIZE);
+        const r = Math.floor((wy - this.y) / CONFIG.CELL_SIZE);
+        if (c >= 0 && c < CONFIG.GRID_COLS && r >= 0 && r < CONFIG.GRID_ROWS) {
+            return { c, r, type: this.grid[r][c] };
+        }
+        return null;
+    }
+
+    // 获取某个格子上的建筑实例
+    getBuildingInstance(c, r) {
+        const tx = this.x + c * CONFIG.CELL_SIZE;
+        const ty = this.y + r * CONFIG.CELL_SIZE;
+        return this.buildings.find(b => Math.abs(b.x - tx) < 1 && Math.abs(b.y - ty) < 1);
+    }
+
+    build(c, r, type, instance) {
+        if (this.grid[r][c] !== 0) return false;
+        this.grid[r][c] = type; 
+        if (instance) {
+            instance.x = this.x + c * CONFIG.CELL_SIZE;
+            instance.y = this.y + r * CONFIG.CELL_SIZE;
+            this.buildings.push(instance);
+        }
+        return true;
+    }
+    
+    removeBuilding(c, r) {
+        const targetX = this.x + c * CONFIG.CELL_SIZE;
+        const targetY = this.y + r * CONFIG.CELL_SIZE;
+        const idx = this.buildings.findIndex(b => Math.abs(b.x - targetX) < 1 && Math.abs(b.y - targetY) < 1);
+        if (idx !== -1) {
+            this.buildings.splice(idx, 1);
+            this.grid[r][c] = 0;
+            return true;
+        }
+        return false;
+    }
+
+    draw(ctx) {
+        // 地板
+        ctx.fillStyle = CONFIG.COLORS.floor;
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+        
+        // 墙壁
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = CONFIG.COLORS.wall;
+        ctx.strokeRect(this.x, this.y, this.w, this.h);
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '24px Arial';
+
+        // 网格内容
+        for(let r=0; r<CONFIG.GRID_ROWS; r++) {
+            for(let c=0; c<CONFIG.GRID_COLS; c++) {
+                const type = this.grid[r][c];
+                const gx = this.x + c * CONFIG.CELL_SIZE;
+                const gy = this.y + r * CONFIG.CELL_SIZE;
+                const cx = gx + CONFIG.CELL_SIZE/2;
+                const cy = gy + CONFIG.CELL_SIZE/2;
+
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(gx, gy, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE);
+
+                if (type === 1) { // 床
+                    ctx.fillStyle = 'rgba(255, 211, 105, 0.2)';
+                    ctx.fillRect(gx+1, gy+1, CONFIG.CELL_SIZE-2, CONFIG.CELL_SIZE-2);
+                    ctx.fillText('🛏️', cx, cy);
+                } else if (type === 9) { // 门口
+                     ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                     ctx.fillRect(gx+1, gy+1, CONFIG.CELL_SIZE-2, CONFIG.CELL_SIZE-2);
+                     ctx.font = '16px Arial';
+                     ctx.fillText('👣', cx, cy);
+                     ctx.font = '24px Arial';
+                }
+            }
+        }
+
+        this.buildings.forEach(b => b.draw(ctx));
+
+        if (this.door.active) {
+             const hpRatio = this.door.hp / this.door.maxHp;
+             ctx.fillStyle = this.door.hp > 0 ? (hpRatio > 0.5 ? CONFIG.COLORS.door : '#ff6b6b') : 'transparent';
+             if (this.door.hp > 0) {
+                 ctx.fillRect(this.door.x, this.door.y, this.door.w, this.door.h);
+                 // 血条
+                 ctx.fillStyle = '#000';
+                 ctx.fillRect(this.door.x, this.door.y-6, this.door.w, 4);
+                 ctx.fillStyle = '#0f0';
+                 ctx.fillRect(this.door.x, this.door.y-6, this.door.w * hpRatio, 4);
+                 
+                 ctx.fillStyle = '#fff';
+                 ctx.font = '10px Arial';
+                 ctx.textAlign = 'center';
+                 ctx.fillText(`Lv.${this.door.level}`, this.door.x + this.door.w/2, this.door.y + 20);
+                 
+                 ctx.font = '12px Arial';
+                 ctx.fillText('🔒', this.door.x + this.door.w/2, this.door.y + 5);
+             }
+        } else {
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(this.door.x, this.door.y, this.door.w, this.door.h);
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🚪', this.door.x + this.door.w/2, this.door.y + 5);
+        }
+    }
+}
+
+class Survivor extends Entity {
+    constructor(name, isPlayer = false) {
+        super(0, 0, isPlayer ? '#00a8ff' : '#aaa');
+        this.name = name;
+        this.isPlayer = isPlayer;
+        this.room = null;
+        this.state = 'IDLE';
+        
+        this.gold = 0;
+        this.income = 1;
+        this.electricity = 0;
+        
+        this.bedLevel = 1;
+        this.targetRoom = null;
+        this.aiTimer = 0;
+    }
+
+    update(dt) {
+        if (this.dead) return;
+        if (this.state === 'IDLE') {
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+        } else if (this.state === 'SLEEPING') {
+            this.gold += this.income * dt;
+            
+            if (!this.isPlayer) this.aiLogic(dt);
+        }
+    }
+
+    draw(ctx) {
+        if (this.dead) {
+            ctx.font = '20px Arial';
+            ctx.fillText('☠️', this.x, this.y);
+            return;
+        }
+
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 8, 0, Math.PI*2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(this.name, this.x, this.y - 12);
+        
+        if (this.state === 'SLEEPING' && game.frame % 60 < 30) {
+            ctx.fillStyle = 'yellow';
+            ctx.fillText('zZ', this.x + 10, this.y - 5);
+        }
+    }
+
+    aiLogic(dt) {
+        this.aiTimer += dt;
+        if (this.aiTimer < 1.0) return;
+        this.aiTimer = 0;
+        
+        // AI 逻辑更新：使用更低的初始阈值
+        const doorCost = CONFIG.COSTS.DOOR_BASE * Math.pow(2, this.room.door.level - 1);
+        const bedCost = CONFIG.COSTS.BED_BASE * Math.pow(2, this.bedLevel - 1);
+        const turretCost = CONFIG.COSTS.TURRET_BASE;
+
+        // 优先升级床
+        if (this.gold > bedCost) {
+            this.upgradeBed();
+            return;
+        }
+        
+        // 门血量低或钱多升级门
+        if ((this.room.door.hp < this.room.door.maxHp * 0.5 || this.gold > doorCost) && this.gold > doorCost) {
+            this.upgradeDoor();
+            return;
+        }
+
+        // 随机造塔
+        if (this.gold > turretCost) {
+             for(let r=0; r<CONFIG.GRID_ROWS; r++) {
+                 for(let c=0; c<CONFIG.GRID_COLS; c++) {
+                     if(this.room.grid[r][c] === 0) {
+                         this.gold -= turretCost;
+                         this.room.build(c, r, 2, new Turret(0,0, this.room));
+                         return;
+                     }
+                 }
+             }
+        }
+    }
+
+    upgradeBed() {
+        // 成本翻倍公式：Base * 2^(Level-1)
+        const cost = CONFIG.COSTS.BED_BASE * Math.pow(2, this.bedLevel - 1);
+        if (this.gold >= cost) {
+            this.gold -= cost;
+            this.bedLevel++;
+            this.income *= 2; // 收益翻倍
+            game.showFloatText(`床 Lv.${this.bedLevel}`, this.x, this.y, '#ffd700');
+            return true;
+        }
+        return false;
+    }
+    
+    upgradeDoor() {
+        const cost = CONFIG.COSTS.DOOR_BASE * Math.pow(2, this.room.door.level - 1);
+        if (this.gold >= cost) {
+            this.gold -= cost;
+            this.room.door.level++;
+            this.room.door.maxHp *= 2; // 血量翻倍
+            this.room.door.hp = this.room.door.maxHp;
+            game.showFloatText(`门 Lv.${this.room.door.level}`, this.room.door.x, this.room.door.y, '#0f0');
+            return true;
+        }
+        return false;
+    }
+}
+
+class Turret extends Entity {
+    constructor(x, y, room) {
+        super(x, y, '#393e46');
+        this.room = room;
+        this.range = 200;
+        this.damage = 10;
+        this.level = 1;
+        this.cooldown = 0;
+        this.fireRate = 0.8;
+    }
+    
+    upgrade() {
+        this.level++;
+        this.damage *= 2; // 伤害翻倍
+    }
+
+    update(dt, ghost) {
+        if (this.cooldown > 0) this.cooldown -= dt;
+        if (ghost && !ghost.dead && !ghost.isRetreating) {
+            if (Utils.getDistance(this, ghost) < this.range && this.cooldown <= 0) {
+                this.shoot(ghost);
+                this.cooldown = this.fireRate;
+            }
+        }
+    }
+
+    shoot(ghost) {
+        game.projectiles.push({
+            sx: this.x + 16, sy: this.y + 16,
+            tx: ghost.x, ty: ghost.y,
+            life: 0.15, color: '#0ff'
+        });
+        ghost.takeDamage(this.damage);
+    }
+
+    draw(ctx) {
+        const cx = this.x + 16;
+        const cy = this.y + 16;
+        ctx.fillStyle = 'rgba(60, 60, 70, 0.5)';
+        ctx.fillRect(this.x+2, this.y+2, 28, 28);
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🔫', cx, cy);
+        
+        // 显示等级
+        ctx.font = '10px Arial';
+        ctx.fillStyle = '#0ff';
+        ctx.fillText(`Lv.${this.level}`, cx, cy + 12);
+    }
+}
+
+class Trap extends Entity {
+    constructor(x, y, room) {
+        super(x, y, '#5c2a9d');
+        this.room = room;
+        this.range = 100;
+    }
+    
+    update(dt, ghost) {
+        if (ghost && !ghost.isRetreating && ghost.targetRoom === this.room) {
+            if (Utils.getDistance(this, ghost) < this.range) {
+                ghost.speedMultiplier = 0.5;
+            }
+        }
+    }
+    
+    draw(ctx) {
+        ctx.fillStyle = 'rgba(147, 51, 234, 0.15)';
+        ctx.beginPath();
+        ctx.arc(this.x+16, this.y+16, this.range, 0, Math.PI*2);
+        ctx.fill();
+        const cx = this.x + 16;
+        const cy = this.y + 16;
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🕸️', cx, cy);
+    }
+}
+
+class GameConsole extends Entity {
+    constructor(x, y, room) {
+        super(x, y, '#ff00ff');
+        this.room = room;
+        this.timer = 0;
+        this.interval = 1.0;
+        this.amount = 1;
+    }
+
+    update(dt, ghost) {
+        this.timer += dt;
+        if (this.timer >= this.interval) {
+            this.timer = 0;
+            if (this.room.owner) {
+                this.room.owner.electricity += this.amount;
+                if (this.room.owner.isPlayer) {
+                    game.showFloatText("⚡+1", this.x + 16, this.y, '#00bfff', 10);
+                }
+            }
+        }
+    }
+
+    draw(ctx) {
+        const cx = this.x + 16;
+        const cy = this.y + 16;
+        ctx.fillStyle = 'rgba(50, 50, 200, 0.3)';
+        ctx.fillRect(this.x+2, this.y+2, 28, 28);
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎮', cx, cy);
+    }
+}
+
+class Ghost extends Entity {
+    constructor(x, y) {
+        super(x, y, '#ff0000');
+        this.level = 1;
+        this.maxHp = 1000;
+        this.hp = 1000;
+        this.baseSpeed = 90;
+        this.speedMultiplier = 1;
+        this.damage = 15;
+        this.state = 'ROAM';
+        this.targetRoom = null;
+        this.isRetreating = false;
+        this.active = false;
+    }
+
+    update(dt, survivors) {
+        if (!this.active) return;
+        this.speedMultiplier = 1;
+        
+        if (this.isRetreating) {
+            const center = {x: game.mapCenter.x, y: game.mapCenter.y};
+            const dist = Utils.getDistance(this, center);
+            if (dist > 10) {
+                const angle = Math.atan2(center.y - this.y, center.x - this.x);
+                this.x += Math.cos(angle) * this.baseSpeed * 2 * dt;
+                this.y += Math.sin(angle) * this.baseSpeed * 2 * dt;
+            } else {
+                this.hp += 300 * dt;
+                if (this.hp >= this.maxHp) {
+                    this.upgrade();
+                }
+            }
+            return;
+        }
+
+        if (this.hp <= 0) {
+            this.startRetreat();
+            return;
+        }
+
+        if (this.state === 'ROAM') {
+            let nearest = null;
+            let minDist = Infinity;
+            survivors.forEach(s => {
+                if (s.state === 'SLEEPING' && !s.dead && s.room.door.hp > 0) {
+                    const d = Utils.getDistance(this, s.room.door);
+                    if (d < minDist) {
+                        minDist = d;
+                        nearest = s.room;
+                    }
+                }
+            });
+            
+            if (nearest) {
+                this.targetRoom = nearest;
+                this.state = 'MOVE';
+            }
+        }
+
+        if (this.state === 'MOVE') {
+            if (!this.targetRoom || this.targetRoom.door.hp <= 0) {
+                this.state = 'ROAM';
+                return;
+            }
+            const door = this.targetRoom.door;
+            const tx = door.x + door.w/2;
+            const ty = door.y + door.h + 20;
+            
+            const dist = Utils.getDistance(this, {x: tx, y: ty});
+            if (dist > 5) {
+                const angle = Math.atan2(ty - this.y, tx - this.x);
+                const spd = this.baseSpeed * this.speedMultiplier;
+                this.x += Math.cos(angle) * spd * dt;
+                this.y += Math.sin(angle) * spd * dt;
+            } else {
+                this.state = 'ATTACK';
+            }
+        }
+
+        if (this.state === 'ATTACK') {
+            if (this.targetRoom.door.hp > 0) {
+                this.targetRoom.door.hp -= this.damage * dt;
+                if (Math.random() > 0.9) {
+                    game.showFloatText((this.damage * dt * 30).toFixed(0), this.targetRoom.door.x, this.targetRoom.door.y, '#e94560');
+                }
+            } else {
+                this.targetRoom.door.hp = 0;
+                this.state = 'KILL';
+            }
+        }
+        
+        if (this.state === 'KILL') {
+            const owner = this.targetRoom.owner;
+            const dist = Utils.getDistance(this, owner);
+            if (dist > 5) {
+                const angle = Math.atan2(owner.y - this.y, owner.x - this.x);
+                this.x += Math.cos(angle) * this.baseSpeed * dt;
+                this.y += Math.sin(angle) * this.baseSpeed * dt;
+            } else {
+                owner.dead = true;
+                if (owner.isPlayer) game.gameOver(false);
+                this.state = 'ROAM';
+            }
+        }
+    }
+
+    takeDamage(dmg) {
+        this.hp -= dmg;
+        if (Math.random() > 0.5) game.showFloatText(`-${dmg}`, this.x, this.y - 30, '#fff');
+    }
+
+    startRetreat() {
+        this.isRetreating = true;
+        this.state = 'RETREAT';
+        game.showFloatText("鬼逃跑了!", this.x, this.y, '#fff', 20);
+    }
+
+    upgrade() {
+        this.isRetreating = false;
+        this.level++;
+        this.maxHp *= 1.4;
+        this.hp = this.maxHp;
+        this.damage *= 1.3;
+        this.state = 'ROAM';
+        game.showFloatText(`鬼升级 Lv.${this.level}!`, this.x, this.y, '#f00', 25);
+    }
+
+    draw(ctx) {
+        if (!this.active && !this.isRetreating) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        const hpPct = this.hp / this.maxHp;
+        ctx.fillStyle = 'red';
+        ctx.fillRect(-20, -40, 40, 4);
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(-20, -40, 40 * hpPct, 4);
+
+        if (this.state === 'ATTACK') ctx.translate(Math.random()*4-2, Math.random()*4-2);
+
+        ctx.font = '32px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.isRetreating ? '😨' : '👹', 0, 0);
+        ctx.restore();
+    }
+}
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        this.camera = new Camera();
+        
+        this.lastTime = 0;
+        this.isRunning = false;
+        this.frame = 0;
+        
+        this.rooms = [];
+        this.survivors = [];
+        this.ghost = null;
+        this.player = null;
+        this.projectiles = [];
+        this.floatTexts = [];
+        
+        this.mapCenter = {x: 0, y: 0};
+        
+        this.timer = 30; // 倒计时
+        this.timerInterval = null;
+
+        this.selectedGrid = null;
+        this.keys = {};
+        this.joystickActive = false; 
+
+        this.inputState = {
+            dragging: false,
+            lastX: 0,
+            lastY: 0,
+            downX: 0,
+            downY: 0
+        };
+
+        this.initInput();
+    }
+
+    resize() {
+        this.canvas.width = document.getElementById('game-container').offsetWidth;
+        this.canvas.height = document.getElementById('game-container').offsetHeight;
+    }
+
+    startGame() {
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-msg').classList.remove('hidden');
+        this.isRunning = true;
+        
+        this.rooms = [];
+        this.survivors = [];
+        
+        const totalW = 3 * (CONFIG.ROOM_W + 100);
+        const totalH = 2 * (CONFIG.ROOM_H + 120);
+        const offsetX = (this.canvas.width - totalW)/2 + 200;
+        const offsetY = (this.canvas.height - totalH)/2 + 100;
+
+        for(let r=0; r<CONFIG.MAP_ROWS; r++) {
+            for(let c=0; c<CONFIG.MAP_COLS; c++) {
+                const room = new Room(r*3+c, r, c);
+                room.x += offsetX;
+                room.y += offsetY;
+                room.door.x = room.x + room.w/2 - 20;
+                room.door.y = room.y + room.h - 10;
+                
+                let bx=0, by=0, bc=0;
+                for(let rr=0; rr<CONFIG.GRID_ROWS; rr++) {
+                    for(let cc=0; cc<CONFIG.GRID_COLS; cc++) {
+                        if(room.grid[rr][cc] === 1) {
+                            bx += (cc*CONFIG.CELL_SIZE+CONFIG.CELL_SIZE/2);
+                            by += (rr*CONFIG.CELL_SIZE+CONFIG.CELL_SIZE/2);
+                            bc++;
+                        }
+                    }
+                }
+                room.bedCenter = {x: room.x+bx/bc, y: room.y+by/bc};
+                
+                this.rooms.push(room);
+            }
+        }
+        
+        this.mapCenter = {
+            x: this.rooms[4].x - 50,
+            y: this.rooms[4].y - 60
+        };
+
+        this.player = new Survivor("我", true);
+        this.player.x = this.mapCenter.x;
+        this.player.y = this.mapCenter.y;
+        this.survivors.push(this.player);
+
+        const botNames = ["阿强", "翠花", "小明", "老王", "Jerry"];
+        botNames.forEach((name, i) => {
+            const bot = new Survivor(name);
+            bot.x = this.mapCenter.x + Utils.random(-50, 50);
+            bot.y = this.mapCenter.y + Utils.random(-50, 50);
+            this.survivors.push(bot);
+            
+            setTimeout(() => {
+                const emptyRooms = this.rooms.filter(r => !r.owner);
+                if (emptyRooms.length > 0) {
+                    const target = emptyRooms[Utils.random(0, emptyRooms.length-1)];
+                    bot.targetRoom = target;
+                    const dx = target.bedCenter.x - bot.x;
+                    const dy = target.bedCenter.y - bot.y;
+                    const dist = Math.hypot(dx, dy);
+                    bot.vx = (dx/dist) * bot.speed;
+                    bot.vy = (dy/dist) * bot.speed;
+                    
+                    setTimeout(() => {
+                        if (!target.owner) {
+                            this.occupyRoom(bot, target);
+                        }
+                    }, dist/bot.speed * 1000);
+                }
+            }, 1000 + i*500);
+        });
+
+        this.ghost = new Ghost(this.mapCenter.x, this.mapCenter.y - 300);
+
+        this.timerInterval = setInterval(() => {
+            this.timer--;
+            document.getElementById('timer-display').innerText = this.timer;
+            if (this.timer <= 0) {
+                clearInterval(this.timerInterval);
+                this.spawnGhost();
+            }
+        }, 1000);
+
+        this.lastTime = performance.now();
+        requestAnimationFrame(t => this.loop(t));
+    }
+
+    spawnGhost() {
+        this.ghost.active = true;
+        this.ghost.x = this.mapCenter.x;
+        this.ghost.y = this.mapCenter.y;
+        document.getElementById('game-msg').innerText = "猎梦者出现了！小心！";
+        document.getElementById('game-msg').classList.add('text-red-500');
+        
+        this.survivors.forEach(s => {
+            if (s.state === 'IDLE') s.dead = true;
+        });
+        
+        if (this.player.dead) this.gameOver(false);
+    }
+
+    occupyRoom(survivor, room) {
+        if (room.owner) return false;
+        survivor.room = room;
+        room.owner = survivor;
+        survivor.state = 'SLEEPING';
+        survivor.x = room.bedCenter.x;
+        survivor.y = room.bedCenter.y;
+        survivor.vx = 0;
+        survivor.vy = 0;
+        
+        room.state = 'CLOSED';
+        room.door.active = true;
+        
+        if (survivor.isPlayer) {
+            document.getElementById('game-msg').innerText = "努力升级床铺和大门，抵御猎梦者！";
+            document.getElementById('action-btn').style.display = 'none';
+        }
+        return true;
+    }
+
+    handleAction() {
+        if (this.player.state === 'IDLE') {
+            let nearest = null;
+            let dist = 50;
+            this.rooms.forEach(r => {
+                if (!r.owner) {
+                    const d = Utils.getDistance(this.player, r.bedCenter);
+                    if (d < dist) {
+                        dist = d;
+                        nearest = r;
+                    }
+                }
+            });
+            
+            if (nearest) {
+                this.occupyRoom(this.player, nearest);
+            }
+        }
+    }
+
+    initInput() {
+        window.addEventListener('keydown', e => this.keys[e.key] = true);
+        window.addEventListener('keyup', e => this.keys[e.key] = false);
+
+        this.canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            this.camera.targetZoom += e.deltaY * -0.001;
+            this.camera.targetZoom = Math.min(Math.max(0.5, this.camera.targetZoom), 2.5);
+        }, {passive: false});
+
+        const zone = document.getElementById('joystick-zone');
+        const knob = document.getElementById('joystick-knob');
+        let joyDragging = false;
+        let startX, startY;
+        
+        const handleStart = (x, y) => {
+            joyDragging = true;
+            this.joystickActive = true;
+            startX = x;
+            startY = y;
+            knob.style.transition = 'none';
+        };
+        const handleMove = (x, y) => {
+            if (!joyDragging) return;
+            const dx = x - startX;
+            const dy = y - startY;
+            const dist = Math.min(Math.hypot(dx, dy), 35);
+            const angle = Math.atan2(dy, dx);
+            const kx = Math.cos(angle) * dist;
+            const ky = Math.sin(angle) * dist;
+            
+            knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+            
+            if (this.player && this.player.state === 'IDLE') {
+                this.player.vx = (kx / 35) * this.player.speed;
+                this.player.vy = (ky / 35) * this.player.speed;
+            }
+        };
+        const handleEnd = () => {
+            joyDragging = false;
+            this.joystickActive = false;
+            knob.style.transition = '0.2s';
+            knob.style.transform = 'translate(-50%, -50%)';
+            if (this.player) { this.player.vx = 0; this.player.vy = 0; }
+        };
+
+        zone.addEventListener('mousedown', e => handleStart(e.clientX, e.clientY));
+        window.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+        window.addEventListener('mouseup', handleEnd);
+        
+        zone.addEventListener('touchstart', e => handleStart(e.touches[0].clientX, e.touches[0].clientY));
+        zone.addEventListener('touchmove', e => handleMove(e.touches[0].clientX, e.touches[0].clientY));
+        zone.addEventListener('touchend', handleEnd);
+
+        this.canvas.addEventListener('pointerdown', e => {
+            this.inputState.dragging = true;
+            this.inputState.lastX = e.clientX;
+            this.inputState.lastY = e.clientY;
+            this.inputState.downX = e.clientX;
+            this.inputState.downY = e.clientY;
+            
+            if (!e.target.closest('#context-menu')) {
+                 this.hideContextMenu();
+            }
+        });
+
+        window.addEventListener('pointermove', e => {
+            if (this.inputState.dragging && this.player && this.player.state === 'SLEEPING') {
+                const dx = e.clientX - this.inputState.lastX;
+                const dy = e.clientY - this.inputState.lastY;
+                
+                this.camera.isManual = true;
+                
+                this.camera.x -= dx / this.camera.zoom;
+                this.camera.y -= dy / this.camera.zoom;
+
+                this.inputState.lastX = e.clientX;
+                this.inputState.lastY = e.clientY;
+            }
+        });
+
+        window.addEventListener('pointerup', e => {
+            this.inputState.dragging = false;
+
+            const dist = Math.hypot(e.clientX - this.inputState.downX, e.clientY - this.inputState.downY);
+            if (dist < 5) {
+                this.handleTap(e.clientX, e.clientY);
+            }
+        });
+    }
+    
+    handleTap(screenX, screenY) {
+        if (!this.player || this.player.dead || this.player.state !== 'SLEEPING') return;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const sx = screenX - rect.left;
+        const sy = screenY - rect.top;
+        const worldPos = this.camera.screenToWorld(sx, sy, this.canvas.width, this.canvas.height);
+        
+        const room = this.player.room;
+        if (Utils.getDistance(worldPos, {x: room.x + room.w/2, y: room.y + room.h/2}) > 300) return;
+
+        const grid = room.getGridAt(worldPos.x, worldPos.y);
+        
+        if (grid) {
+            this.selectedGrid = {room, ...grid};
+            this.showContextMenu(sx, sy, grid);
+        }
+    }
+    
+    showContextMenu(sx, sy, grid) {
+        const menu = document.getElementById('context-menu');
+        menu.style.display = 'flex';
+        menu.style.left = sx + 'px';
+        menu.style.top = sy + 'px';
+        menu.innerHTML = '';
+
+        const { c, r, type } = grid;
+        
+        // 0:空地, 1:床, 9:门, 2:炮, 3:陷阱, 4:游戏机
+        
+        if (type === 0) {
+             menu.innerHTML += `
+                <div class="ctx-btn" onclick="game.buildAction(2)">
+                    <span>🔫 炮台</span><span class="price-tag">$${CONFIG.COSTS.TURRET_BASE}</span>
+                </div>
+                <div class="ctx-btn" onclick="game.buildAction(3)">
+                    <span>🕸️ 陷阱</span><span class="price-tag">$${CONFIG.COSTS.TRAP_BASE}</span>
+                </div>
+                <div class="ctx-btn" onclick="game.buildAction(4)">
+                    <span>🎮 游戏机</span><span class="price-tag">$${CONFIG.COSTS.GAME_BASE}</span>
+                </div>
+             `;
+        } else if (type === 1) {
+             // 床升级：25 * 2^(level-1)
+             const cost = CONFIG.COSTS.BED_BASE * Math.pow(2, this.player.bedLevel - 1);
+             menu.innerHTML += `
+                <div class="ctx-btn" onclick="game.player.upgradeBed(); game.hideContextMenu()">
+                    <span>🛏️ 升级</span>
+                    <span class="level-tag">Lv.${this.player.bedLevel + 1}</span>
+                    <span class="price-tag">$${cost}</span>
+                </div>`;
+        } else if (type === 9) {
+             // 门升级：10 * 2^(level-1)
+             const cost = CONFIG.COSTS.DOOR_BASE * Math.pow(2, this.player.room.door.level - 1);
+             menu.innerHTML += `
+                <div class="ctx-btn" onclick="game.player.upgradeDoor(); game.hideContextMenu()">
+                    <span>🚪 升级</span>
+                    <span class="level-tag">Lv.${this.player.room.door.level + 1}</span>
+                    <span class="price-tag">$${cost}</span>
+                </div>`;
+        } else if (type === 2) {
+             // 炮台升级 (获取炮台实例)
+             const turret = this.player.room.getBuildingInstance(c, r);
+             if (turret) {
+                 // 炮台升级：8 * 2^(level)
+                 const cost = CONFIG.COSTS.TURRET_BASE * Math.pow(2, turret.level);
+                 menu.innerHTML += `
+                    <div class="ctx-btn" onclick="game.upgradeBuildingAction(${c}, ${r})">
+                        <span>🔫 升级</span>
+                        <span class="level-tag">Lv.${turret.level + 1}</span>
+                        <span class="price-tag">$${cost}</span>
+                    </div>`;
+             }
+             menu.innerHTML += `
+                <div class="ctx-btn ctx-btn-danger" onclick="game.sellAction(${c}, ${r})">
+                    <span>♻️ 拆除</span><span class="price-tag">+$${CONFIG.COSTS.TURRET_BASE/2}</span>
+                </div>`;
+        } else if ([3,4].includes(type)) {
+             menu.innerHTML += `
+                <div class="ctx-btn ctx-btn-danger" onclick="game.sellAction(${c}, ${r})">
+                    <span>♻️ 拆除</span><span class="price-tag">+$25</span>
+                </div>`;
+        } else {
+             this.hideContextMenu();
+        }
+    }
+
+    hideContextMenu() {
+        document.getElementById('context-menu').style.display = 'none';
+        this.selectedGrid = null;
+    }
+
+    buildAction(type) {
+        if (!this.selectedGrid) return;
+        const { room, c, r } = this.selectedGrid;
+        
+        let cost = 0;
+        if (type === 2) cost = CONFIG.COSTS.TURRET_BASE;
+        if (type === 3) cost = CONFIG.COSTS.TRAP_BASE;
+        if (type === 4) cost = CONFIG.COSTS.GAME_BASE;
+        
+        if (this.player.gold >= cost) {
+            let instance = null;
+            if (type === 2) instance = new Turret(0, 0, room);
+            if (type === 3) instance = new Trap(0, 0, room);
+            if (type === 4) instance = new GameConsole(0, 0, room);
+            
+            if (room.build(c, r, type, instance)) {
+                this.player.gold -= cost;
+                this.showFloatText("建造成功", instance.x + 16, instance.y, '#0f0');
+            }
+        } else {
+            this.showFloatText("金币不足!", room.x + c*CONFIG.CELL_SIZE, room.y + r*CONFIG.CELL_SIZE, '#f00');
+        }
+        this.hideContextMenu();
+    }
+
+    // 新增：升级建筑（炮台）
+    upgradeBuildingAction(c, r) {
+        if (!this.selectedGrid) return;
+        const { room } = this.selectedGrid;
+        const building = room.getBuildingInstance(c, r);
+        
+        if (building && building instanceof Turret) {
+            // 费用： Base * 2^level
+            const cost = CONFIG.COSTS.TURRET_BASE * Math.pow(2, building.level);
+            if (this.player.gold >= cost) {
+                this.player.gold -= cost;
+                building.upgrade();
+                this.showFloatText(`升级 Lv.${building.level}`, building.x + 16, building.y, '#0ff');
+            } else {
+                this.showFloatText("金币不足!", building.x + 16, building.y, '#f00');
+            }
+        }
+        this.hideContextMenu();
+    }
+    
+    sellAction(c, r) {
+        if (!this.selectedGrid) return;
+        if (this.selectedGrid.room.removeBuilding(c, r)) {
+            this.player.gold += 25; // 简化回收价
+        }
+        this.hideContextMenu();
+    }
+
+    showFloatText(text, x, y, color, size=12) {
+        this.floatTexts.push({text, x, y, color, size, life: 1.0});
+    }
+
+    gameOver(win) {
+        this.isRunning = false;
+        document.getElementById('ui-overlay').classList.add('hidden');
+        document.getElementById('game-over-screen').classList.remove('hidden');
+        const title = document.getElementById('result-title');
+        title.innerText = win ? "天亮了！" : "你被梦魇吞噬了";
+        title.className = win ? "text-4xl mb-4 font-bold text-green-500" : "text-4xl mb-4 font-bold text-red-600";
+        document.getElementById('result-msg').innerText = win ? "你存活了下来" : "下次找个好点的房间吧...";
+    }
+
+    loop(timestamp) {
+        if (!this.isRunning) return;
+        const dt = (timestamp - this.lastTime) / 1000;
+        this.lastTime = timestamp;
+        this.frame++;
+
+        if (this.player && this.player.state === 'IDLE') {
+            let dx = 0, dy = 0;
+            if (this.keys['w'] || this.keys['ArrowUp']) dy = -1;
+            if (this.keys['s'] || this.keys['ArrowDown']) dy = 1;
+            if (this.keys['a'] || this.keys['ArrowLeft']) dx = -1;
+            if (this.keys['d'] || this.keys['ArrowRight']) dx = 1;
+            
+            if (dx !== 0 || dy !== 0) {
+                const len = Math.hypot(dx, dy);
+                this.player.vx = (dx/len) * this.player.speed;
+                this.player.vy = (dy/len) * this.player.speed;
+            } else if (!this.joystickActive) {
+                this.player.vx = 0;
+                this.player.vy = 0;
+            }
+            
+            let canSleep = false;
+            this.rooms.forEach(r => {
+                if (!r.owner && Utils.getDistance(this.player, r.bedCenter) < 40) {
+                    canSleep = true;
+                }
+            });
+            document.getElementById('action-btn').style.display = canSleep ? 'flex' : 'none';
+        }
+
+        this.ghost.update(dt, this.survivors);
+        this.survivors.forEach(s => {
+            s.update(dt);
+            if (s.room) {
+                s.room.buildings.forEach(b => b.update(dt, this.ghost));
+            }
+        });
+        
+        this.camera.updateZoom(dt);
+        if (this.player) {
+            this.camera.follow(this.player, dt);
+        }
+
+        this.ctx.fillStyle = '#0f0f1a';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        this.ctx.save();
+        this.ctx.setTransform(this.camera.zoom, 0, 0, this.camera.zoom, -this.camera.x * this.camera.zoom + this.canvas.width/2, -this.camera.y * this.camera.zoom + this.canvas.height/2);
+
+        this.rooms.forEach(r => r.draw(this.ctx));
+        this.survivors.forEach(s => s.draw(this.ctx));
+        this.ghost.draw(this.ctx);
+        
+        for(let i=this.projectiles.length-1; i>=0; i--) {
+            const p = this.projectiles[i];
+            this.ctx.strokeStyle = p.color;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.moveTo(p.sx, p.sy);
+            this.ctx.lineTo(p.tx, p.ty);
+            this.ctx.stroke();
+            p.life -= dt;
+            if (p.life <= 0) this.projectiles.splice(i, 1);
+        }
+        
+        for(let i=this.floatTexts.length-1; i>=0; i--) {
+            const f = this.floatTexts[i];
+            this.ctx.globalAlpha = f.life;
+            this.ctx.fillStyle = f.color;
+            this.ctx.font = `bold ${f.size}px Arial`;
+            this.ctx.fillText(f.text, f.x, f.y);
+            f.y -= 20 * dt;
+            f.life -= dt;
+            if (f.life <= 0) this.floatTexts.splice(i, 1);
+        }
+        this.ctx.globalAlpha = 1;
+        this.ctx.restore();
+
+        if (this.player) {
+            document.getElementById('gold-display').innerText = Math.floor(this.player.gold);
+            document.getElementById('income-display').innerText = this.player.income;
+            document.getElementById('elec-display').innerText = Math.floor(this.player.electricity);
+            document.getElementById('ghost-level-display').innerText = this.ghost.level;
+        }
+
+        requestAnimationFrame(t => this.loop(t));
+    }
+}
+
+const game = new Game();
+
+</script>
+</body>
+</html>
