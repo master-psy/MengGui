@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>猛鬼宿舍 - 自由探索版</title>
+    <title>圈圈圈进来</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Creepster&family=Noto+Sans+SC:wght@400;700&display=swap');
@@ -84,7 +84,7 @@
             display: none;
             flex-direction: column;
             gap: 6px;
-            min-width: 150px;
+            min-width: 160px;
             z-index: 100;
             pointer-events: auto;
             transform: translate(10px, -50%);
@@ -212,18 +212,18 @@
             </div>
 
             <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-gray-500 text-xs pointer-events-none hidden md:block w-full text-center">
-                WASD移动 | 躺平后拖动屏幕移动视角 | 点击格子建造
+                WASD移动 | 拖动屏幕观察 | 点击格子建造/升级
             </div>
         </div>
 
         <div id="start-screen" class="modal">
-            <h1 class="text-6xl text-red-600 horror-font mb-4">猛鬼宿舍</h1>
-            <h2 class="text-2xl text-white mb-8">自由探索版</h2>
+            <h1 class="text-6xl text-red-600 horror-font mb-4">圈圈圈进来</h1>
+            <h2 class="text-2xl text-white mb-8">猛鬼入侵模式</h2>
             <div class="text-gray-400 text-sm mb-8 text-center leading-relaxed">
-                1. 移动摇杆寻找空房间<br>
-                2. 点击 [睡觉] 占领房间<br>
-                3. 点击格子建造武器 (初始只需 💰8)<br>
-                4. 升级所有物品，属性翻倍！
+                1. 只能从门进入房间，一张床只能睡一人<br>
+                2. 鬼血量<30%会狂暴/眩晕，<20%会逃跑<br>
+                3. 将鬼的血量打空即可获胜！<br>
+                4. 武器升级增加射程，利用距离优势！
             </div>
             <button onclick="game.startGame()" class="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-full text-xl shadow-lg transform transition hover:scale-105">
                 开始游戏
@@ -258,7 +258,6 @@ const CONFIG = {
         valid: 'rgba(0, 255, 0, 0.3)',
         invalid: 'rgba(255, 0, 0, 0.3)'
     },
-    // 基础价格配置
     COSTS: {
         BED_BASE: 25,
         DOOR_BASE: 10,
@@ -317,6 +316,7 @@ class Entity {
         this.vx = 0;
         this.vy = 0;
         this.speed = 100;
+        this.radius = 8;
     }
 }
 
@@ -373,7 +373,6 @@ class Room {
         return null;
     }
 
-    // 获取某个格子上的建筑实例
     getBuildingInstance(c, r) {
         const tx = this.x + c * CONFIG.CELL_SIZE;
         const ty = this.y + r * CONFIG.CELL_SIZE;
@@ -404,11 +403,9 @@ class Room {
     }
 
     draw(ctx) {
-        // 地板
         ctx.fillStyle = CONFIG.COLORS.floor;
         ctx.fillRect(this.x, this.y, this.w, this.h);
         
-        // 墙壁
         ctx.lineWidth = 4;
         ctx.strokeStyle = CONFIG.COLORS.wall;
         ctx.strokeRect(this.x, this.y, this.w, this.h);
@@ -417,7 +414,6 @@ class Room {
         ctx.textBaseline = 'middle';
         ctx.font = '24px Arial';
 
-        // 网格内容
         for(let r=0; r<CONFIG.GRID_ROWS; r++) {
             for(let c=0; c<CONFIG.GRID_COLS; c++) {
                 const type = this.grid[r][c];
@@ -430,11 +426,11 @@ class Room {
                 ctx.lineWidth = 1;
                 ctx.strokeRect(gx, gy, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE);
 
-                if (type === 1) { // 床
+                if (type === 1) { 
                     ctx.fillStyle = 'rgba(255, 211, 105, 0.2)';
                     ctx.fillRect(gx+1, gy+1, CONFIG.CELL_SIZE-2, CONFIG.CELL_SIZE-2);
                     ctx.fillText('🛏️', cx, cy);
-                } else if (type === 9) { // 门口
+                } else if (type === 9) { 
                      ctx.fillStyle = 'rgba(255,255,255,0.1)';
                      ctx.fillRect(gx+1, gy+1, CONFIG.CELL_SIZE-2, CONFIG.CELL_SIZE-2);
                      ctx.font = '16px Arial';
@@ -451,7 +447,6 @@ class Room {
              ctx.fillStyle = this.door.hp > 0 ? (hpRatio > 0.5 ? CONFIG.COLORS.door : '#ff6b6b') : 'transparent';
              if (this.door.hp > 0) {
                  ctx.fillRect(this.door.x, this.door.y, this.door.w, this.door.h);
-                 // 血条
                  ctx.fillStyle = '#000';
                  ctx.fillRect(this.door.x, this.door.y-6, this.door.w, 4);
                  ctx.fillStyle = '#0f0';
@@ -492,41 +487,102 @@ class Survivor extends Entity {
         this.bedLevel = 1;
         this.targetRoom = null;
         this.aiTimer = 0;
+        this.insideRoom = false; 
     }
 
     update(dt) {
         if (this.dead) return;
+        
         if (this.state === 'IDLE') {
-            this.x += this.vx * dt;
-            this.y += this.vy * dt;
+            if (!this.isPlayer && this.targetRoom) {
+                this.updateAIPathing(dt);
+            }
         } else if (this.state === 'SLEEPING') {
             this.gold += this.income * dt;
-            
             if (!this.isPlayer) this.aiLogic(dt);
+        }
+    }
+    
+    updateAIPathing(dt) {
+        // AI 寻路逻辑：如果房间已被占领，放弃并寻找新房间
+        if (this.targetRoom && this.targetRoom.owner && this.targetRoom.owner !== this) {
+            this.targetRoom = null;
+            this.insideRoom = false;
+            // 简单重寻路逻辑在 Game loop 或 AI 思考中处理
+            return;
+        }
+
+        if (!this.targetRoom) return;
+
+        let targetX, targetY;
+        const doorEntX = this.targetRoom.door.x + this.targetRoom.door.w / 2;
+        const doorEntY = this.targetRoom.door.y + 40; 
+        
+        const distToDoor = Utils.getDistance(this, {x: doorEntX, y: doorEntY});
+
+        if (!this.insideRoom) {
+            targetX = doorEntX;
+            targetY = doorEntY;
+            if (distToDoor < 10) {
+                this.insideRoom = true;
+            }
+        } else {
+            targetX = this.targetRoom.bedCenter.x;
+            targetY = this.targetRoom.bedCenter.y;
+            if (Utils.getDistance(this, this.targetRoom.bedCenter) < 5) {
+                game.occupyRoom(this, this.targetRoom);
+            }
+        }
+        
+        if (targetX !== undefined) {
+            const angle = Math.atan2(targetY - this.y, targetX - this.x);
+            this.vx = Math.cos(angle) * this.speed;
+            this.vy = Math.sin(angle) * this.speed;
+            
+            const nextX = this.x + this.vx * dt;
+            const nextY = this.y + this.vy * dt;
+            
+            if (!game.checkWallCollision(nextX, nextY, this.radius)) {
+                this.x = nextX;
+                this.y = nextY;
+            } else {
+                 if(!game.checkWallCollision(nextX, this.y, this.radius)) this.x = nextX;
+                 else if(!game.checkWallCollision(this.x, nextY, this.radius)) this.y = nextY;
+            }
         }
     }
 
     draw(ctx) {
         if (this.dead) {
-            ctx.font = '20px Arial';
+            ctx.font = '24px Arial';
             ctx.fillText('☠️', this.x, this.y);
             return;
         }
 
-        ctx.fillStyle = this.color;
+        // 绘制角色形象 (Emoji)
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const charIcon = this.isPlayer ? '🤠' : '😐'; // 玩家是牛仔，电脑是路人
+        
+        // 阴影
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.beginPath();
-        ctx.arc(this.x, this.y, 8, 0, Math.PI*2);
+        ctx.ellipse(this.x, this.y + 10, 8, 4, 0, 0, Math.PI * 2);
         ctx.fill();
 
+        ctx.fillText(charIcon, this.x, this.y);
+
+        // 名字
         ctx.fillStyle = '#fff';
         ctx.font = '10px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(this.name, this.x, this.y - 12);
+        ctx.fillText(this.name, this.x, this.y - 15);
         
         if (this.state === 'SLEEPING' && game.frame % 60 < 30) {
             ctx.fillStyle = 'yellow';
-            ctx.fillText('zZ', this.x + 10, this.y - 5);
+            ctx.fillText('zZ', this.x + 10, this.y - 10);
         }
     }
 
@@ -535,24 +591,20 @@ class Survivor extends Entity {
         if (this.aiTimer < 1.0) return;
         this.aiTimer = 0;
         
-        // AI 逻辑更新：使用更低的初始阈值
         const doorCost = CONFIG.COSTS.DOOR_BASE * Math.pow(2, this.room.door.level - 1);
         const bedCost = CONFIG.COSTS.BED_BASE * Math.pow(2, this.bedLevel - 1);
         const turretCost = CONFIG.COSTS.TURRET_BASE;
 
-        // 优先升级床
         if (this.gold > bedCost) {
             this.upgradeBed();
             return;
         }
         
-        // 门血量低或钱多升级门
         if ((this.room.door.hp < this.room.door.maxHp * 0.5 || this.gold > doorCost) && this.gold > doorCost) {
             this.upgradeDoor();
             return;
         }
 
-        // 随机造塔
         if (this.gold > turretCost) {
              for(let r=0; r<CONFIG.GRID_ROWS; r++) {
                  for(let c=0; c<CONFIG.GRID_COLS; c++) {
@@ -567,12 +619,11 @@ class Survivor extends Entity {
     }
 
     upgradeBed() {
-        // 成本翻倍公式：Base * 2^(Level-1)
         const cost = CONFIG.COSTS.BED_BASE * Math.pow(2, this.bedLevel - 1);
         if (this.gold >= cost) {
             this.gold -= cost;
             this.bedLevel++;
-            this.income *= 2; // 收益翻倍
+            this.income *= 2; 
             game.showFloatText(`床 Lv.${this.bedLevel}`, this.x, this.y, '#ffd700');
             return true;
         }
@@ -584,7 +635,7 @@ class Survivor extends Entity {
         if (this.gold >= cost) {
             this.gold -= cost;
             this.room.door.level++;
-            this.room.door.maxHp *= 2; // 血量翻倍
+            this.room.door.maxHp *= 2; 
             this.room.door.hp = this.room.door.maxHp;
             game.showFloatText(`门 Lv.${this.room.door.level}`, this.room.door.x, this.room.door.y, '#0f0');
             return true;
@@ -597,7 +648,7 @@ class Turret extends Entity {
     constructor(x, y, room) {
         super(x, y, '#393e46');
         this.room = room;
-        this.range = 200;
+        this.range = 150; // 初始范围
         this.damage = 10;
         this.level = 1;
         this.cooldown = 0;
@@ -606,7 +657,8 @@ class Turret extends Entity {
     
     upgrade() {
         this.level++;
-        this.damage *= 2; // 伤害翻倍
+        this.damage *= 2;
+        this.range *= 1.15; // 升级增加15%范围
     }
 
     update(dt, ghost) {
@@ -638,10 +690,11 @@ class Turret extends Entity {
         ctx.textBaseline = 'middle';
         ctx.fillText('🔫', cx, cy);
         
-        // 显示等级
         ctx.font = '10px Arial';
         ctx.fillStyle = '#0ff';
         ctx.fillText(`Lv.${this.level}`, cx, cy + 12);
+        
+        // 可选：绘制范围圈（仅在升级时或者鼠标悬停时，这里简化不绘制以免太乱）
     }
 }
 
@@ -718,6 +771,8 @@ class Ghost extends Entity {
         this.speedMultiplier = 1;
         this.damage = 15;
         this.state = 'ROAM';
+        this.status = 'NORMAL'; // NORMAL, BERSERK, STUNNED
+        this.statusTimer = 0;
         this.targetRoom = null;
         this.isRetreating = false;
         this.active = false;
@@ -725,29 +780,49 @@ class Ghost extends Entity {
 
     update(dt, survivors) {
         if (!this.active) return;
-        this.speedMultiplier = 1;
+        
+        // 死亡检测：如果不是正在回血（逃跑成功归位），且血量<=0，则彻底死亡
+        if (this.hp <= 0 && !this.isRetreating) {
+            this.hp = 0;
+            this.dead = true;
+            game.gameOver(true); // 玩家胜利
+            return;
+        }
+
+        // 状态效果恢复
+        if (this.status !== 'NORMAL') {
+            this.statusTimer -= dt;
+            if (this.statusTimer <= 0) {
+                this.status = 'NORMAL';
+                this.speedMultiplier = 1;
+            }
+        }
+
+        // 逃跑逻辑：血量 < 20%
+        if (!this.isRetreating && this.hp < this.maxHp * 0.2) {
+            this.startRetreat();
+        }
         
         if (this.isRetreating) {
+            this.speedMultiplier = 1.5; // 逃跑加速
             const center = {x: game.mapCenter.x, y: game.mapCenter.y};
             const dist = Utils.getDistance(this, center);
             if (dist > 10) {
                 const angle = Math.atan2(center.y - this.y, center.x - this.x);
-                this.x += Math.cos(angle) * this.baseSpeed * 2 * dt;
-                this.y += Math.sin(angle) * this.baseSpeed * 2 * dt;
+                this.x += Math.cos(angle) * this.baseSpeed * this.speedMultiplier * dt;
+                this.y += Math.sin(angle) * this.baseSpeed * this.speedMultiplier * dt;
             } else {
-                this.hp += 300 * dt;
+                // 回到中心回血
+                this.hp += 400 * dt;
                 if (this.hp >= this.maxHp) {
-                    this.upgrade();
+                    this.hp = this.maxHp;
+                    this.upgrade(survivors); // 满血复活升级并重新寻路
                 }
             }
             return;
         }
 
-        if (this.hp <= 0) {
-            this.startRetreat();
-            return;
-        }
-
+        // 正常行为
         if (this.state === 'ROAM') {
             let nearest = null;
             let minDist = Infinity;
@@ -779,7 +854,11 @@ class Ghost extends Entity {
             const dist = Utils.getDistance(this, {x: tx, y: ty});
             if (dist > 5) {
                 const angle = Math.atan2(ty - this.y, tx - this.x);
-                const spd = this.baseSpeed * this.speedMultiplier;
+                // 应用眩晕或狂暴速度
+                let spd = this.baseSpeed;
+                if (this.status === 'BERSERK') spd *= 1.5;
+                if (this.status === 'STUNNED') spd = 0;
+                
                 this.x += Math.cos(angle) * spd * dt;
                 this.y += Math.sin(angle) * spd * dt;
             } else {
@@ -788,10 +867,15 @@ class Ghost extends Entity {
         }
 
         if (this.state === 'ATTACK') {
+            if (this.status === 'STUNNED') return; // 眩晕不能攻击
+
             if (this.targetRoom.door.hp > 0) {
-                this.targetRoom.door.hp -= this.damage * dt;
+                let dmg = this.damage;
+                if (this.status === 'BERSERK') dmg *= 2; // 狂暴伤害翻倍
+                
+                this.targetRoom.door.hp -= dmg * dt;
                 if (Math.random() > 0.9) {
-                    game.showFloatText((this.damage * dt * 30).toFixed(0), this.targetRoom.door.x, this.targetRoom.door.y, '#e94560');
+                    game.showFloatText((dmg * dt * 30).toFixed(0), this.targetRoom.door.x, this.targetRoom.door.y, '#e94560');
                 }
             } else {
                 this.targetRoom.door.hp = 0;
@@ -800,6 +884,8 @@ class Ghost extends Entity {
         }
         
         if (this.state === 'KILL') {
+            if (this.status === 'STUNNED') return;
+
             const owner = this.targetRoom.owner;
             const dist = Utils.getDistance(this, owner);
             if (dist > 5) {
@@ -817,22 +903,49 @@ class Ghost extends Entity {
     takeDamage(dmg) {
         this.hp -= dmg;
         if (Math.random() > 0.5) game.showFloatText(`-${dmg}`, this.x, this.y - 30, '#fff');
+        
+        // 低血量触发状态判定 (血量 < 30% 且当前没跑没异常)
+        if (this.hp < this.maxHp * 0.3 && !this.isRetreating && this.status === 'NORMAL') {
+            if (Math.random() < 0.1) { // 每次受伤10%概率触发
+                if (Math.random() < 0.5) {
+                    this.status = 'BERSERK';
+                    this.statusTimer = 3.0; // 狂暴3秒
+                    game.showFloatText("😡 狂暴!", this.x, this.y - 50, '#f00', 20);
+                } else {
+                    this.status = 'STUNNED';
+                    this.statusTimer = 2.0; // 眩晕2秒
+                    game.showFloatText("💫 眩晕!", this.x, this.y - 50, '#ff0', 20);
+                }
+            }
+        }
     }
 
     startRetreat() {
         this.isRetreating = true;
+        this.status = 'NORMAL'; // 清楚负面
         this.state = 'RETREAT';
         game.showFloatText("鬼逃跑了!", this.x, this.y, '#fff', 20);
     }
 
-    upgrade() {
+    // 复活并重新选择随机目标
+    upgrade(survivors) {
         this.isRetreating = false;
         this.level++;
         this.maxHp *= 1.4;
         this.hp = this.maxHp;
         this.damage *= 1.3;
-        this.state = 'ROAM';
         game.showFloatText(`鬼升级 Lv.${this.level}!`, this.x, this.y, '#f00', 25);
+
+        // 随机选择一个新的存活目标
+        const validTargets = survivors.filter(s => s.state === 'SLEEPING' && !s.dead && s.room.door.hp > 0);
+        if (validTargets.length > 0) {
+            const randomTarget = validTargets[Utils.random(0, validTargets.length - 1)];
+            this.targetRoom = randomTarget.room;
+            this.state = 'MOVE';
+            game.showFloatText("👿 鬼锁定了新目标!", this.x, this.y - 80, '#f00', 16);
+        } else {
+            this.state = 'ROAM';
+        }
     }
 
     draw(ctx) {
@@ -840,18 +953,31 @@ class Ghost extends Entity {
         ctx.save();
         ctx.translate(this.x, this.y);
         
-        const hpPct = this.hp / this.maxHp;
+        const hpPct = Math.max(0, this.hp / this.maxHp);
         ctx.fillStyle = 'red';
         ctx.fillRect(-20, -40, 40, 4);
         ctx.fillStyle = '#0f0';
         ctx.fillRect(-20, -40, 40 * hpPct, 4);
 
-        if (this.state === 'ATTACK') ctx.translate(Math.random()*4-2, Math.random()*4-2);
+        if (this.state === 'ATTACK' && this.status !== 'STUNNED') {
+            ctx.translate(Math.random()*4-2, Math.random()*4-2);
+        }
+
+        // 状态颜色
+        if (this.status === 'BERSERK') ctx.fillStyle = '#ff0000'; // 深红
+        else if (this.status === 'STUNNED') ctx.fillStyle = '#ffff00'; // 黄色
+        else ctx.fillStyle = '#ffffff';
 
         ctx.font = '32px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(this.isRetreating ? '😨' : '👹', 0, 0);
+        
+        let icon = '👹';
+        if (this.isRetreating) icon = '😨';
+        if (this.status === 'STUNNED') icon = '😵';
+        if (this.status === 'BERSERK') icon = '👿';
+        
+        ctx.fillText(icon, 0, 0);
         ctx.restore();
     }
 }
@@ -956,22 +1082,14 @@ class Game {
             bot.y = this.mapCenter.y + Utils.random(-50, 50);
             this.survivors.push(bot);
             
+            // 简单的 AI 延迟启动
             setTimeout(() => {
+                // 筛选未被占领且没有主人预定的房间
                 const emptyRooms = this.rooms.filter(r => !r.owner);
                 if (emptyRooms.length > 0) {
                     const target = emptyRooms[Utils.random(0, emptyRooms.length-1)];
+                    // 防止 AI 撞车：这里只是简单分配，AI 到达后还会检查
                     bot.targetRoom = target;
-                    const dx = target.bedCenter.x - bot.x;
-                    const dy = target.bedCenter.y - bot.y;
-                    const dist = Math.hypot(dx, dy);
-                    bot.vx = (dx/dist) * bot.speed;
-                    bot.vy = (dy/dist) * bot.speed;
-                    
-                    setTimeout(() => {
-                        if (!target.owner) {
-                            this.occupyRoom(bot, target);
-                        }
-                    }, dist/bot.speed * 1000);
                 }
             }, 1000 + i*500);
         });
@@ -1006,7 +1124,9 @@ class Game {
     }
 
     occupyRoom(survivor, room) {
-        if (room.owner) return false;
+        // 核心修正：严格检查房间是否已被占领
+        if (room.owner && room.owner !== survivor) return false;
+        
         survivor.room = room;
         room.owner = survivor;
         survivor.state = 'SLEEPING';
@@ -1136,6 +1256,37 @@ class Game {
         });
     }
     
+    // 墙壁碰撞检测
+    checkWallCollision(x, y, r) {
+        for (let room of this.rooms) {
+            // 定义房间的四面墙 (上下左右)
+            const walls = [
+                // 上
+                {x: room.x, y: room.y, w: room.w, h: 10}, 
+                // 左
+                {x: room.x, y: room.y, w: 10, h: room.h}, 
+                // 右
+                {x: room.x + room.w - 10, y: room.y, w: 10, h: room.h},
+                // 下左 (门左边)
+                {x: room.x, y: room.y + room.h - 10, w: room.door.x - room.x, h: 10},
+                // 下右 (门右边)
+                {x: room.door.x + room.door.w, y: room.y + room.h - 10, w: room.x + room.w - (room.door.x + room.door.w), h: 10}
+            ];
+
+            for (let w of walls) {
+                // 矩形与圆碰撞
+                let closestX = Math.max(w.x, Math.min(x, w.x + w.w));
+                let closestY = Math.max(w.y, Math.min(y, w.y + w.h));
+                let dx = x - closestX;
+                let dy = y - closestY;
+                if ((dx * dx + dy * dy) < (r * r)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
     handleTap(screenX, screenY) {
         if (!this.player || this.player.dead || this.player.state !== 'SLEEPING') return;
 
@@ -1164,8 +1315,6 @@ class Game {
 
         const { c, r, type } = grid;
         
-        // 0:空地, 1:床, 9:门, 2:炮, 3:陷阱, 4:游戏机
-        
         if (type === 0) {
              menu.innerHTML += `
                 <div class="ctx-btn" onclick="game.buildAction(2)">
@@ -1179,7 +1328,6 @@ class Game {
                 </div>
              `;
         } else if (type === 1) {
-             // 床升级：25 * 2^(level-1)
              const cost = CONFIG.COSTS.BED_BASE * Math.pow(2, this.player.bedLevel - 1);
              menu.innerHTML += `
                 <div class="ctx-btn" onclick="game.player.upgradeBed(); game.hideContextMenu()">
@@ -1188,7 +1336,6 @@ class Game {
                     <span class="price-tag">$${cost}</span>
                 </div>`;
         } else if (type === 9) {
-             // 门升级：10 * 2^(level-1)
              const cost = CONFIG.COSTS.DOOR_BASE * Math.pow(2, this.player.room.door.level - 1);
              menu.innerHTML += `
                 <div class="ctx-btn" onclick="game.player.upgradeDoor(); game.hideContextMenu()">
@@ -1197,10 +1344,8 @@ class Game {
                     <span class="price-tag">$${cost}</span>
                 </div>`;
         } else if (type === 2) {
-             // 炮台升级 (获取炮台实例)
              const turret = this.player.room.getBuildingInstance(c, r);
              if (turret) {
-                 // 炮台升级：8 * 2^(level)
                  const cost = CONFIG.COSTS.TURRET_BASE * Math.pow(2, turret.level);
                  menu.innerHTML += `
                     <div class="ctx-btn" onclick="game.upgradeBuildingAction(${c}, ${r})">
@@ -1253,19 +1398,19 @@ class Game {
         this.hideContextMenu();
     }
 
-    // 新增：升级建筑（炮台）
     upgradeBuildingAction(c, r) {
         if (!this.selectedGrid) return;
         const { room } = this.selectedGrid;
         const building = room.getBuildingInstance(c, r);
         
         if (building && building instanceof Turret) {
-            // 费用： Base * 2^level
             const cost = CONFIG.COSTS.TURRET_BASE * Math.pow(2, building.level);
             if (this.player.gold >= cost) {
                 this.player.gold -= cost;
                 building.upgrade();
                 this.showFloatText(`升级 Lv.${building.level}`, building.x + 16, building.y, '#0ff');
+                // 显示射程增加提示
+                this.showFloatText(`射程↑`, building.x + 16, building.y + 20, '#0f0', 10);
             } else {
                 this.showFloatText("金币不足!", building.x + 16, building.y, '#f00');
             }
@@ -1276,7 +1421,7 @@ class Game {
     sellAction(c, r) {
         if (!this.selectedGrid) return;
         if (this.selectedGrid.room.removeBuilding(c, r)) {
-            this.player.gold += 25; // 简化回收价
+            this.player.gold += 25; 
         }
         this.hideContextMenu();
     }
@@ -1290,9 +1435,9 @@ class Game {
         document.getElementById('ui-overlay').classList.add('hidden');
         document.getElementById('game-over-screen').classList.remove('hidden');
         const title = document.getElementById('result-title');
-        title.innerText = win ? "天亮了！" : "你被梦魇吞噬了";
+        title.innerText = win ? "恭喜胜利！" : "你被梦魇吞噬了";
         title.className = win ? "text-4xl mb-4 font-bold text-green-500" : "text-4xl mb-4 font-bold text-red-600";
-        document.getElementById('result-msg').innerText = win ? "你存活了下来" : "下次找个好点的房间吧...";
+        document.getElementById('result-msg').innerText = win ? "猛鬼已被消灭，今夜安全了。" : "下次请加强防御...";
     }
 
     loop(timestamp) {
@@ -1315,6 +1460,24 @@ class Game {
             } else if (!this.joystickActive) {
                 this.player.vx = 0;
                 this.player.vy = 0;
+            }
+            
+            // 应用玩家移动 + 碰撞检测
+            if (this.player.vx !== 0 || this.player.vy !== 0) {
+                let nextX = this.player.x + this.player.vx * dt;
+                let nextY = this.player.y + this.player.vy * dt;
+                
+                if (!this.checkWallCollision(nextX, nextY, 8)) {
+                    this.player.x = nextX;
+                    this.player.y = nextY;
+                } else {
+                    // 滑行尝试
+                    if (!this.checkWallCollision(nextX, this.player.y, 8)) {
+                        this.player.x = nextX;
+                    } else if (!this.checkWallCollision(this.player.x, nextY, 8)) {
+                        this.player.y = nextY;
+                    }
+                }
             }
             
             let canSleep = false;
@@ -1349,6 +1512,18 @@ class Game {
         this.survivors.forEach(s => s.draw(this.ctx));
         this.ghost.draw(this.ctx);
         
+        // 绘制升级时的炮台范围 (可选：这里简单绘制所有炮台的范围，透明度很低)
+        if(this.selectedGrid && this.selectedGrid.type === 2) {
+             const b = this.player.room.getBuildingInstance(this.selectedGrid.c, this.selectedGrid.r);
+             if(b) {
+                 this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+                 this.ctx.lineWidth = 1;
+                 this.ctx.beginPath();
+                 this.ctx.arc(b.x + 16, b.y + 16, b.range, 0, Math.PI*2);
+                 this.ctx.stroke();
+             }
+        }
+
         for(let i=this.projectiles.length-1; i>=0; i--) {
             const p = this.projectiles[i];
             this.ctx.strokeStyle = p.color;
