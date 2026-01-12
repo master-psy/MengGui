@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>圈圈圈进来</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -13,25 +13,29 @@
             background-color: #000;
             color: #e94560;
             overflow: hidden;
-            touch-action: none;
+            touch-action: none; /* 禁止默认触摸行为 */
             user-select: none;
             -webkit-user-select: none;
             margin: 0;
             padding: 0;
+            height: 100vh;
+            width: 100vw;
         }
 
         .horror-font { font-family: 'Creepster', cursive; }
 
         #game-container {
             position: relative;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             background-color: #0f0f1a;
             overflow: hidden;
         }
 
         canvas {
             display: block;
+            width: 100%;
+            height: 100%;
         }
 
         .ui-layer {
@@ -46,19 +50,21 @@
             justify-content: space-between;
             padding: 10px;
             z-index: 10;
+            box-sizing: border-box;
         }
 
         .interactive { pointer-events: auto; }
 
+        /* 摇杆区域优化 */
         #joystick-zone {
             position: absolute;
-            bottom: 50px;
-            left: 50px;
+            bottom: 40px;
+            left: 30px;
             width: 120px;
             height: 120px;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
             border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.2);
             pointer-events: auto;
             touch-action: none;
         }
@@ -79,45 +85,45 @@
             position: absolute;
             background: rgba(22, 33, 62, 0.98);
             border: 2px solid #e94560;
-            border-radius: 8px;
-            padding: 6px;
+            border-radius: 12px;
+            padding: 8px;
             display: none;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
             min-width: 160px;
             z-index: 100;
             pointer-events: auto;
-            transform: translate(10px, -50%);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.9);
+            transform: translate(20px, -50%); /* 防止手指遮挡 */
+            box-shadow: 0 8px 32px rgba(0,0,0,0.9);
+            backdrop-filter: blur(4px);
         }
 
         .ctx-btn {
             background: #1a1a2e;
             color: white;
             border: 1px solid #4ecca3;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 0.85rem;
+            padding: 10px 14px; /* 加大点击区域 */
+            border-radius: 8px;
+            font-size: 14px;
             text-align: left;
             cursor: pointer;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: background 0.2s;
+            transition: all 0.1s;
         }
-        .ctx-btn:hover { background: #4ecca3; color: #000; }
+        .ctx-btn:active { transform: scale(0.98); }
         .ctx-btn-danger { border-color: #ff4444; color: #ffcccc; }
-        .ctx-btn-danger:hover { background: #ff4444; color: white; }
         
-        .price-tag { font-size: 0.75rem; opacity: 0.8; font-weight: bold; color: #ffd700; }
-        .level-tag { font-size: 0.7rem; color: #aaa; margin-left: 4px;}
+        .price-tag { font-size: 12px; opacity: 0.9; font-weight: bold; color: #ffd700; }
+        .level-tag { font-size: 10px; color: #aaa; margin-left: 4px; background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px;}
 
         #action-btn {
             position: absolute;
-            bottom: 80px;
-            right: 50px;
-            width: 80px;
-            height: 80px;
+            bottom: 60px;
+            right: 40px;
+            width: 90px;
+            height: 90px;
             border-radius: 50%;
             background: #4ecca3;
             color: #1a1a2e;
@@ -125,39 +131,40 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            box-shadow: 0 0 15px #4ecca3;
-            font-size: 1.2rem;
+            box-shadow: 0 0 20px rgba(78, 204, 163, 0.6);
+            font-size: 1.5rem;
             pointer-events: auto;
             display: none;
             animation: pulse-green 1.5s infinite;
             border: 4px solid #fff;
             text-shadow: 1px 1px 2px black;
+            z-index: 50;
         }
 
         @keyframes pulse-green {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0.7); }
-            70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(78, 204, 163, 0); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(78, 204, 163, 0); }
             100% { transform: scale(1); }
         }
 
         #hud-top {
             display: flex;
             justify-content: space-between;
-            max-width: 800px;
-            margin: 0 auto;
             width: 100%;
-            gap: 5px;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
         .stat-box {
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.6);
             padding: 6px 12px;
-            border-radius: 20px;
+            border-radius: 16px;
             border: 1px solid #555;
             font-weight: bold;
-            font-size: 0.85rem;
+            font-size: 14px;
             color: #fff;
             white-space: nowrap;
+            backdrop-filter: blur(2px);
         }
 
         .modal {
@@ -173,6 +180,7 @@
             align-items: center;
             z-index: 200;
             pointer-events: auto;
+            padding: 20px;
         }
     </style>
 </head>
@@ -199,7 +207,7 @@
                 </div>
             </div>
 
-            <div id="game-msg" class="absolute top-20 w-full text-center text-white text-shadow-md font-bold text-lg animate-bounce pointer-events-none hidden">
+            <div id="game-msg" class="absolute top-20 w-full text-center text-white text-shadow-md font-bold text-lg animate-bounce pointer-events-none hidden px-4">
                 快找个房间躲起来！
             </div>
 
@@ -208,24 +216,24 @@
             </div>
 
             <div id="action-btn" onclick="game.handleAction()">
-                🛏️<br>睡觉
+                🛏️<br><span style="font-size:12px">睡觉</span>
             </div>
 
-            <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-gray-500 text-xs pointer-events-none hidden md:block w-full text-center">
-                WASD移动 | 拖动屏幕观察 | 点击格子建造/升级
+            <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-gray-500 text-xs pointer-events-none hidden md:block w-full text-center opacity-50">
+                WASD移动 | 拖动屏幕观察 | 点击格子建造
             </div>
         </div>
 
         <div id="start-screen" class="modal">
-            <h1 class="text-6xl text-red-600 horror-font mb-4">圈圈圈进来</h1>
-            <h2 class="text-2xl text-white mb-8">猛鬼入侵模式</h2>
-            <div class="text-gray-400 text-sm mb-8 text-center leading-relaxed">
-                1. 只能从门进入房间，一张床只能睡一人<br>
-                2. 鬼血量<30%会狂暴/眩晕，<20%会逃跑<br>
-                3. 将鬼的血量打空即可获胜！<br>
-                4. 武器升级增加射程，利用距离优势！
+            <h1 class="text-5xl text-red-600 horror-font mb-4 text-center">圈圈圈进来</h1>
+            <h2 class="text-xl text-white mb-6 text-center">H5 猛鬼入侵版</h2>
+            <div class="text-gray-300 text-sm mb-8 text-left leading-loose bg-gray-900 p-6 rounded-xl border border-gray-700 max-w-sm w-full">
+                1. 摇杆控制移动，只能从🚪进入房间。<br>
+                2. 上床睡觉赚钱，建造武器防御。<br>
+                3. 武器升级会改变形态，射程更远。<br>
+                4. 鬼血量低会逃跑，将其消灭获胜！
             </div>
-            <button onclick="game.startGame()" class="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-full text-xl shadow-lg transform transition hover:scale-105">
+            <button onclick="game.startGame()" class="w-full max-w-xs py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-full text-xl shadow-lg transform transition active:scale-95">
                 开始游戏
             </button>
         </div>
@@ -233,7 +241,7 @@
         <div id="game-over-screen" class="modal hidden">
             <h2 id="result-title" class="text-4xl mb-4 font-bold"></h2>
             <p id="result-msg" class="text-gray-300 mb-6"></p>
-            <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded">
+            <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg">
                 重新开始
             </button>
         </div>
@@ -317,6 +325,82 @@ class Entity {
         this.vy = 0;
         this.speed = 100;
         this.radius = 8;
+    }
+}
+
+class Bullet {
+    constructor(x, y, target, damage, speed = 400) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.damage = damage;
+        this.speed = speed;
+        this.life = 1.5; // 子弹最大存在时间
+        this.active = true;
+    }
+
+    update(dt) {
+        if (!this.active) return;
+        this.life -= dt;
+        if (this.life <= 0) {
+            this.active = false;
+            return;
+        }
+
+        // 简单的追踪逻辑，如果目标死了，继续沿最后方向飞？简化为直接追踪
+        // 如果目标死了，这颗子弹失效
+        if (this.target.dead || this.target.hp <= 0) {
+            this.active = false;
+            return;
+        }
+
+        const dx = this.target.x - this.x;
+        const dy = this.target.y - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 20) { // 命中判断
+            this.target.takeDamage(this.damage);
+            this.active = false;
+            // 命中特效
+            game.particles.push(new Particle(this.target.x, this.target.y, '#ffff00', 3));
+        } else {
+            // 移动
+            this.x += (dx / dist) * this.speed * dt;
+            this.y += (dy / dist) * this.speed * dt;
+        }
+    }
+
+    draw(ctx) {
+        if (!this.active) return;
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+class Particle {
+    constructor(x, y, color, size = 2) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.life = 0.3;
+        this.size = size;
+        this.vx = (Math.random() - 0.5) * 100;
+        this.vy = (Math.random() - 0.5) * 100;
+    }
+    update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.life -= dt;
+    }
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life / 0.3);
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
     }
 }
 
@@ -442,11 +526,24 @@ class Room {
 
         this.buildings.forEach(b => b.draw(ctx));
 
+        // 门 (带形态变化)
         if (this.door.active) {
              const hpRatio = this.door.hp / this.door.maxHp;
-             ctx.fillStyle = this.door.hp > 0 ? (hpRatio > 0.5 ? CONFIG.COLORS.door : '#ff6b6b') : 'transparent';
+             
+             // 门的外观随等级变化
+             let doorColor = CONFIG.COLORS.door;
+             let doorIcon = '🚪';
+             if (this.door.level >= 3) { doorColor = '#4a90e2'; doorIcon = '🛡️'; } // 铁门
+             if (this.door.level >= 5) { doorColor = '#ffd700'; doorIcon = '💠'; } // 能量门
+
+             // 血量低变红
+             if (hpRatio <= 0.5) doorColor = '#ff6b6b';
+
+             ctx.fillStyle = this.door.hp > 0 ? doorColor : 'transparent';
+             
              if (this.door.hp > 0) {
                  ctx.fillRect(this.door.x, this.door.y, this.door.w, this.door.h);
+                 // 血条
                  ctx.fillStyle = '#000';
                  ctx.fillRect(this.door.x, this.door.y-6, this.door.w, 4);
                  ctx.fillStyle = '#0f0';
@@ -458,7 +555,7 @@ class Room {
                  ctx.fillText(`Lv.${this.door.level}`, this.door.x + this.door.w/2, this.door.y + 20);
                  
                  ctx.font = '12px Arial';
-                 ctx.fillText('🔒', this.door.x + this.door.w/2, this.door.y + 5);
+                 ctx.fillText(doorIcon, this.door.x + this.door.w/2, this.door.y + 5);
              }
         } else {
             ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -504,11 +601,9 @@ class Survivor extends Entity {
     }
     
     updateAIPathing(dt) {
-        // AI 寻路逻辑：如果房间已被占领，放弃并寻找新房间
         if (this.targetRoom && this.targetRoom.owner && this.targetRoom.owner !== this) {
             this.targetRoom = null;
             this.insideRoom = false;
-            // 简单重寻路逻辑在 Game loop 或 AI 思考中处理
             return;
         }
 
@@ -559,13 +654,11 @@ class Survivor extends Entity {
             return;
         }
 
-        // 绘制角色形象 (Emoji)
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const charIcon = this.isPlayer ? '🤠' : '😐'; // 玩家是牛仔，电脑是路人
+        const charIcon = this.isPlayer ? '🤠' : '😐'; 
         
-        // 阴影
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.beginPath();
         ctx.ellipse(this.x, this.y + 10, 8, 4, 0, 0, Math.PI * 2);
@@ -573,7 +666,6 @@ class Survivor extends Entity {
 
         ctx.fillText(charIcon, this.x, this.y);
 
-        // 名字
         ctx.fillStyle = '#fff';
         ctx.font = '10px Arial';
         ctx.textAlign = 'center';
@@ -648,7 +740,7 @@ class Turret extends Entity {
     constructor(x, y, room) {
         super(x, y, '#393e46');
         this.room = room;
-        this.range = 150; // 初始范围
+        this.range = 150; 
         this.damage = 10;
         this.level = 1;
         this.cooldown = 0;
@@ -658,7 +750,7 @@ class Turret extends Entity {
     upgrade() {
         this.level++;
         this.damage *= 2;
-        this.range *= 1.15; // 升级增加15%范围
+        this.range *= 1.15; 
     }
 
     update(dt, ghost) {
@@ -672,12 +764,9 @@ class Turret extends Entity {
     }
 
     shoot(ghost) {
-        game.projectiles.push({
-            sx: this.x + 16, sy: this.y + 16,
-            tx: ghost.x, ty: ghost.y,
-            life: 0.15, color: '#0ff'
-        });
-        ghost.takeDamage(this.damage);
+        // 创建子弹实体
+        const b = new Bullet(this.x + 16, this.y + 16, ghost, this.damage);
+        game.bullets.push(b);
     }
 
     draw(ctx) {
@@ -688,13 +777,17 @@ class Turret extends Entity {
         ctx.font = '20px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('🔫', cx, cy);
+        
+        // 武器形态随等级改变
+        let icon = '🔫';
+        if (this.level >= 2) icon = '♊';
+        if (this.level >= 3) icon = '🚀';
+        
+        ctx.fillText(icon, cx, cy);
         
         ctx.font = '10px Arial';
         ctx.fillStyle = '#0ff';
         ctx.fillText(`Lv.${this.level}`, cx, cy + 12);
-        
-        // 可选：绘制范围圈（仅在升级时或者鼠标悬停时，这里简化不绘制以免太乱）
     }
 }
 
@@ -771,7 +864,7 @@ class Ghost extends Entity {
         this.speedMultiplier = 1;
         this.damage = 15;
         this.state = 'ROAM';
-        this.status = 'NORMAL'; // NORMAL, BERSERK, STUNNED
+        this.status = 'NORMAL'; 
         this.statusTimer = 0;
         this.targetRoom = null;
         this.isRetreating = false;
@@ -781,15 +874,13 @@ class Ghost extends Entity {
     update(dt, survivors) {
         if (!this.active) return;
         
-        // 死亡检测：如果不是正在回血（逃跑成功归位），且血量<=0，则彻底死亡
         if (this.hp <= 0 && !this.isRetreating) {
             this.hp = 0;
             this.dead = true;
-            game.gameOver(true); // 玩家胜利
+            game.gameOver(true); 
             return;
         }
 
-        // 状态效果恢复
         if (this.status !== 'NORMAL') {
             this.statusTimer -= dt;
             if (this.statusTimer <= 0) {
@@ -798,13 +889,12 @@ class Ghost extends Entity {
             }
         }
 
-        // 逃跑逻辑：血量 < 20%
         if (!this.isRetreating && this.hp < this.maxHp * 0.2) {
             this.startRetreat();
         }
         
         if (this.isRetreating) {
-            this.speedMultiplier = 1.5; // 逃跑加速
+            this.speedMultiplier = 1.5; 
             const center = {x: game.mapCenter.x, y: game.mapCenter.y};
             const dist = Utils.getDistance(this, center);
             if (dist > 10) {
@@ -812,17 +902,15 @@ class Ghost extends Entity {
                 this.x += Math.cos(angle) * this.baseSpeed * this.speedMultiplier * dt;
                 this.y += Math.sin(angle) * this.baseSpeed * this.speedMultiplier * dt;
             } else {
-                // 回到中心回血
                 this.hp += 400 * dt;
                 if (this.hp >= this.maxHp) {
                     this.hp = this.maxHp;
-                    this.upgrade(survivors); // 满血复活升级并重新寻路
+                    this.upgrade(survivors); 
                 }
             }
             return;
         }
 
-        // 正常行为
         if (this.state === 'ROAM') {
             let nearest = null;
             let minDist = Infinity;
@@ -854,7 +942,6 @@ class Ghost extends Entity {
             const dist = Utils.getDistance(this, {x: tx, y: ty});
             if (dist > 5) {
                 const angle = Math.atan2(ty - this.y, tx - this.x);
-                // 应用眩晕或狂暴速度
                 let spd = this.baseSpeed;
                 if (this.status === 'BERSERK') spd *= 1.5;
                 if (this.status === 'STUNNED') spd = 0;
@@ -867,11 +954,11 @@ class Ghost extends Entity {
         }
 
         if (this.state === 'ATTACK') {
-            if (this.status === 'STUNNED') return; // 眩晕不能攻击
+            if (this.status === 'STUNNED') return; 
 
             if (this.targetRoom.door.hp > 0) {
                 let dmg = this.damage;
-                if (this.status === 'BERSERK') dmg *= 2; // 狂暴伤害翻倍
+                if (this.status === 'BERSERK') dmg *= 2; 
                 
                 this.targetRoom.door.hp -= dmg * dt;
                 if (Math.random() > 0.9) {
@@ -904,16 +991,15 @@ class Ghost extends Entity {
         this.hp -= dmg;
         if (Math.random() > 0.5) game.showFloatText(`-${dmg}`, this.x, this.y - 30, '#fff');
         
-        // 低血量触发状态判定 (血量 < 30% 且当前没跑没异常)
         if (this.hp < this.maxHp * 0.3 && !this.isRetreating && this.status === 'NORMAL') {
-            if (Math.random() < 0.1) { // 每次受伤10%概率触发
+            if (Math.random() < 0.1) { 
                 if (Math.random() < 0.5) {
                     this.status = 'BERSERK';
-                    this.statusTimer = 3.0; // 狂暴3秒
+                    this.statusTimer = 3.0; 
                     game.showFloatText("😡 狂暴!", this.x, this.y - 50, '#f00', 20);
                 } else {
                     this.status = 'STUNNED';
-                    this.statusTimer = 2.0; // 眩晕2秒
+                    this.statusTimer = 2.0; 
                     game.showFloatText("💫 眩晕!", this.x, this.y - 50, '#ff0', 20);
                 }
             }
@@ -922,12 +1008,11 @@ class Ghost extends Entity {
 
     startRetreat() {
         this.isRetreating = true;
-        this.status = 'NORMAL'; // 清楚负面
+        this.status = 'NORMAL'; 
         this.state = 'RETREAT';
         game.showFloatText("鬼逃跑了!", this.x, this.y, '#fff', 20);
     }
 
-    // 复活并重新选择随机目标
     upgrade(survivors) {
         this.isRetreating = false;
         this.level++;
@@ -936,7 +1021,6 @@ class Ghost extends Entity {
         this.damage *= 1.3;
         game.showFloatText(`鬼升级 Lv.${this.level}!`, this.x, this.y, '#f00', 25);
 
-        // 随机选择一个新的存活目标
         const validTargets = survivors.filter(s => s.state === 'SLEEPING' && !s.dead && s.room.door.hp > 0);
         if (validTargets.length > 0) {
             const randomTarget = validTargets[Utils.random(0, validTargets.length - 1)];
@@ -963,9 +1047,8 @@ class Ghost extends Entity {
             ctx.translate(Math.random()*4-2, Math.random()*4-2);
         }
 
-        // 状态颜色
-        if (this.status === 'BERSERK') ctx.fillStyle = '#ff0000'; // 深红
-        else if (this.status === 'STUNNED') ctx.fillStyle = '#ffff00'; // 黄色
+        if (this.status === 'BERSERK') ctx.fillStyle = '#ff0000'; 
+        else if (this.status === 'STUNNED') ctx.fillStyle = '#ffff00'; 
         else ctx.fillStyle = '#ffffff';
 
         ctx.font = '32px Arial';
@@ -1000,8 +1083,9 @@ class Game {
         this.survivors = [];
         this.ghost = null;
         this.player = null;
-        this.projectiles = [];
+        this.bullets = []; // 子弹容器
         this.floatTexts = [];
+        this.particles = []; // 粒子容器
         
         this.mapCenter = {x: 0, y: 0};
         
@@ -1035,6 +1119,7 @@ class Game {
         
         this.rooms = [];
         this.survivors = [];
+        this.bullets = [];
         
         const totalW = 3 * (CONFIG.ROOM_W + 100);
         const totalH = 2 * (CONFIG.ROOM_H + 120);
@@ -1082,13 +1167,10 @@ class Game {
             bot.y = this.mapCenter.y + Utils.random(-50, 50);
             this.survivors.push(bot);
             
-            // 简单的 AI 延迟启动
             setTimeout(() => {
-                // 筛选未被占领且没有主人预定的房间
                 const emptyRooms = this.rooms.filter(r => !r.owner);
                 if (emptyRooms.length > 0) {
                     const target = emptyRooms[Utils.random(0, emptyRooms.length-1)];
-                    // 防止 AI 撞车：这里只是简单分配，AI 到达后还会检查
                     bot.targetRoom = target;
                 }
             }, 1000 + i*500);
@@ -1124,7 +1206,6 @@ class Game {
     }
 
     occupyRoom(survivor, room) {
-        // 核心修正：严格检查房间是否已被占领
         if (room.owner && room.owner !== survivor) return false;
         
         survivor.room = room;
@@ -1497,6 +1578,22 @@ class Game {
             }
         });
         
+        // 子弹更新
+        for(let i=this.bullets.length-1; i>=0; i--) {
+            this.bullets[i].update(dt);
+            if (!this.bullets[i].active) {
+                this.bullets.splice(i, 1);
+            }
+        }
+
+        // 粒子更新
+        for(let i=this.particles.length-1; i>=0; i--) {
+            this.particles[i].update(dt);
+            if (this.particles[i].life <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+        
         this.camera.updateZoom(dt);
         if (this.player) {
             this.camera.follow(this.player, dt);
@@ -1524,17 +1621,10 @@ class Game {
              }
         }
 
-        for(let i=this.projectiles.length-1; i>=0; i--) {
-            const p = this.projectiles[i];
-            this.ctx.strokeStyle = p.color;
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.moveTo(p.sx, p.sy);
-            this.ctx.lineTo(p.tx, p.ty);
-            this.ctx.stroke();
-            p.life -= dt;
-            if (p.life <= 0) this.projectiles.splice(i, 1);
-        }
+        // 绘制子弹
+        this.bullets.forEach(b => b.draw(this.ctx));
+        // 绘制粒子
+        this.particles.forEach(p => p.draw(this.ctx));
         
         for(let i=this.floatTexts.length-1; i>=0; i--) {
             const f = this.floatTexts[i];
